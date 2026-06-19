@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Database (user data, not committed)
+data/soccer.db
+data/processed/
+
+# Sample generated data (can be regenerated)
+data/sample/historical_matches.csv
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Joblib model files
+*.joblib
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Streamlit
+.streamlit/

@@ -1,0 +1,26 @@
+# Soccer Prediction System Settings
+
+database:
+  # SQLite by default. Replace with postgresql://user:pass@host/db for Postgres.
+  url: null  # null = use default data/soccer.db
+
+simulation:
+  default_n_simulations: 10000
+  seed: 42
+
+models:
+  default: elo_logistic
+  save_dir: data/processed/models
+
+tournament:
+  name: "FIFA World Cup"
+  year: 2026
+
+data:
+  sample_dir: data/sample
+  raw_dir: data/raw
+  processed_dir: data/processed
+
+logging:
+  level: INFO
+  file: data/soccer_prediction.log

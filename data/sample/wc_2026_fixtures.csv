@@ -1,0 +1,73 @@
+home_team,away_team,match_date,stage,group_name,is_neutral
+USA,Algeria,2026-06-11,group,A,True
+Germany,South Korea,2026-06-11,group,A,True
+USA,South Korea,2026-06-15,group,A,True
+Germany,Algeria,2026-06-15,group,A,True
+Germany,USA,2026-06-19,group,A,True
+South Korea,Algeria,2026-06-19,group,A,True
+Brazil,Ivory Coast,2026-06-11,group,B,True
+Switzerland,Australia,2026-06-11,group,B,True
+Brazil,Australia,2026-06-15,group,B,True
+Switzerland,Ivory Coast,2026-06-15,group,B,True
+Brazil,Switzerland,2026-06-19,group,B,True
+Ivory Coast,Australia,2026-06-19,group,B,True
+France,New Zealand,2026-06-12,group,C,True
+Japan,Ecuador,2026-06-12,group,C,True
+France,Ecuador,2026-06-16,group,C,True
+Japan,New Zealand,2026-06-16,group,C,True
+France,Japan,2026-06-20,group,C,True
+Ecuador,New Zealand,2026-06-20,group,C,True
+Spain,Iraq,2026-06-12,group,D,True
+Nigeria,Croatia,2026-06-12,group,D,True
+Spain,Croatia,2026-06-16,group,D,True
+Nigeria,Iraq,2026-06-16,group,D,True
+Spain,Nigeria,2026-06-20,group,D,True
+Croatia,Iraq,2026-06-20,group,D,True
+England,Jamaica,2026-06-12,group,E,True
+Denmark,Senegal,2026-06-12,group,E,True
+England,Senegal,2026-06-16,group,E,True
+Denmark,Jamaica,2026-06-16,group,E,True
+England,Denmark,2026-06-20,group,E,True
+Senegal,Jamaica,2026-06-20,group,E,True
+Argentina,UAE,2026-06-13,group,F,True
+Poland,Cameroon,2026-06-13,group,F,True
+Argentina,Cameroon,2026-06-17,group,F,True
+Poland,UAE,2026-06-17,group,F,True
+Argentina,Poland,2026-06-21,group,F,True
+Cameroon,UAE,2026-06-21,group,F,True
+Portugal,Saudi Arabia,2026-06-13,group,G,True
+Serbia,Colombia,2026-06-13,group,G,True
+Portugal,Colombia,2026-06-17,group,G,True
+Serbia,Saudi Arabia,2026-06-17,group,G,True
+Portugal,Serbia,2026-06-21,group,G,True
+Colombia,Saudi Arabia,2026-06-21,group,G,True
+Netherlands,Chile,2026-06-13,group,H,True
+Hungary,Morocco,2026-06-13,group,H,True
+Netherlands,Morocco,2026-06-17,group,H,True
+Hungary,Chile,2026-06-17,group,H,True
+Netherlands,Hungary,2026-06-21,group,H,True
+Morocco,Chile,2026-06-21,group,H,True
+Belgium,Canada,2026-06-14,group,I,True
+Italy,Tunisia,2026-06-14,group,I,True
+Belgium,Tunisia,2026-06-18,group,I,True
+Italy,Canada,2026-06-18,group,I,True
+Belgium,Italy,2026-06-22,group,I,True
+Tunisia,Canada,2026-06-22,group,I,True
+Mexico,Iran,2026-06-14,group,J,True
+Czechia,Ghana,2026-06-14,group,J,True
+Mexico,Ghana,2026-06-18,group,J,True
+Czechia,Iran,2026-06-18,group,J,True
+Mexico,Czechia,2026-06-22,group,J,True
+Iran,Ghana,2026-06-22,group,J,True
+Uruguay,Qatar,2026-06-14,group,K,True
+Slovakia,Egypt,2026-06-14,group,K,True
+Uruguay,Egypt,2026-06-18,group,K,True
+Slovakia,Qatar,2026-06-18,group,K,True
+Uruguay,Slovakia,2026-06-22,group,K,True
+Egypt,Qatar,2026-06-22,group,K,True
+Costa Rica,Scotland,2026-06-15,group,L,True
+Slovenia,Panama,2026-06-15,group,L,True
+Costa Rica,Panama,2026-06-19,group,L,True
+Slovenia,Scotland,2026-06-19,group,L,True
+Costa Rica,Slovenia,2026-06-23,group,L,True
+Panama,Scotland,2026-06-23,group,L,True

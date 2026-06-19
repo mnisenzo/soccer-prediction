@@ -1,0 +1,253 @@
+# World Cup 2026 Market Definitions
+# Kalshi-style prediction markets for the FIFA World Cup 2026
+#
+# Categories:
+#   tournament_winner    params: team
+#   reaches_stage        params: team, stage (round_of_32 | round_of_16 | quarterfinal | semifinal | final)
+#   advances_from_group  params: team
+#   group_winner         params: team, group
+#   match_outcome        params: home_team, away_team, outcome (H|D|A), is_neutral
+#   over_under_goals     params: home_team, away_team, threshold, direction (over|under), is_neutral
+#   both_teams_score     params: home_team, away_team, is_neutral
+#   clean_sheet          params: team, home_team, away_team, is_neutral
+#
+# market_price: optional Kalshi implied probability (0.0–1.0) for comparison
+
+markets:
+
+  # ── Tournament Winner ───────────────────────────────────────────────
+  - id: brazil_wins_wc
+    name: "Brazil wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: Brazil
+    market_price: 0.14
+
+  - id: france_wins_wc
+    name: "France wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: France
+    market_price: 0.12
+
+  - id: argentina_wins_wc
+    name: "Argentina wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: Argentina
+    market_price: 0.13
+
+  - id: england_wins_wc
+    name: "England wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: England
+    market_price: 0.10
+
+  - id: spain_wins_wc
+    name: "Spain wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: Spain
+    market_price: 0.11
+
+  - id: germany_wins_wc
+    name: "Germany wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: Germany
+    market_price: 0.08
+
+  - id: portugal_wins_wc
+    name: "Portugal wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: Portugal
+    market_price: 0.07
+
+  - id: usa_wins_wc
+    name: "USA wins World Cup 2026"
+    category: tournament_winner
+    params:
+      team: USA
+
+  # ── Advances From Group ─────────────────────────────────────────────
+  - id: usa_advances_group
+    name: "USA advances from group"
+    category: advances_from_group
+    params:
+      team: USA
+    market_price: 0.65
+
+  - id: mexico_advances_group
+    name: "Mexico advances from group"
+    category: advances_from_group
+    params:
+      team: Mexico
+
+  - id: brazil_advances_group
+    name: "Brazil advances from group"
+    category: advances_from_group
+    params:
+      team: Brazil
+    market_price: 0.88
+
+  - id: england_advances_group
+    name: "England advances from group"
+    category: advances_from_group
+    params:
+      team: England
+    market_price: 0.85
+
+  - id: morocco_advances_group
+    name: "Morocco advances from group"
+    category: advances_from_group
+    params:
+      team: Morocco
+
+  # ── Group Winners ───────────────────────────────────────────────────
+  - id: usa_wins_group_a
+    name: "USA wins Group A"
+    category: group_winner
+    params:
+      team: USA
+      group: A
+
+  - id: germany_wins_group_a
+    name: "Germany wins Group A"
+    category: group_winner
+    params:
+      team: Germany
+      group: A
+
+  - id: brazil_wins_group_b
+    name: "Brazil wins Group B"
+    category: group_winner
+    params:
+      team: Brazil
+      group: B
+
+  - id: france_wins_group_c
+    name: "France wins Group C"
+    category: group_winner
+    params:
+      team: France
+      group: C
+
+  - id: spain_wins_group_d
+    name: "Spain wins Group D"
+    category: group_winner
+    params:
+      team: Spain
+      group: D
+
+  - id: england_wins_group_e
+    name: "England wins Group E"
+    category: group_winner
+    params:
+      team: England
+      group: E
+
+  # ── Reaches Stage ───────────────────────────────────────────────────
+  - id: brazil_reaches_sf
+    name: "Brazil reaches semifinal"
+    category: reaches_stage
+    params:
+      team: Brazil
+      stage: semifinal
+    market_price: 0.40
+
+  - id: usa_reaches_qf
+    name: "USA reaches quarterfinal"
+    category: reaches_stage
+    params:
+      team: USA
+      stage: quarterfinal
+    market_price: 0.22
+
+  - id: france_reaches_final
+    name: "France reaches the final"
+    category: reaches_stage
+    params:
+      team: France
+      stage: final
+    market_price: 0.28
+
+  - id: argentina_reaches_sf
+    name: "Argentina reaches semifinal"
+    category: reaches_stage
+    params:
+      team: Argentina
+      stage: semifinal
+    market_price: 0.38
+
+  - id: england_reaches_final
+    name: "England reaches the final"
+    category: reaches_stage
+    params:
+      team: England
+      stage: final
+    market_price: 0.24
+
+  - id: morocco_reaches_ro16
+    name: "Morocco reaches Round of 16"
+    category: reaches_stage
+    params:
+      team: Morocco
+      stage: round_of_16
+
+  # ── Match-Level Markets (Group Stage examples) ──────────────────────
+  - id: usa_vs_germany_hw
+    name: "USA beats Germany (Group A)"
+    category: match_outcome
+    params:
+      home_team: USA
+      away_team: Germany
+      outcome: H
+      is_neutral: true
+
+  - id: usa_vs_germany_over25
+    name: "USA vs Germany Over 2.5 Goals"
+    category: over_under_goals
+    params:
+      home_team: USA
+      away_team: Germany
+      threshold: 2.5
+      direction: over
+      is_neutral: true
+
+  - id: usa_vs_germany_btts
+    name: "USA vs Germany Both Teams to Score"
+    category: both_teams_score
+    params:
+      home_team: USA
+      away_team: Germany
+      is_neutral: true
+
+  - id: brazil_vs_ivory_coast_hw
+    name: "Brazil beats Ivory Coast"
+    category: match_outcome
+    params:
+      home_team: Brazil
+      away_team: Ivory Coast
+      outcome: H
+      is_neutral: true
+
+  - id: brazil_clean_sheet_vs_ivory_coast
+    name: "Brazil keeps clean sheet vs Ivory Coast"
+    category: clean_sheet
+    params:
+      team: Brazil
+      home_team: Brazil
+      away_team: Ivory Coast
+      is_neutral: true
+
+  - id: france_vs_japan_over25
+    name: "France vs Japan Over 2.5 Goals"
+    category: over_under_goals
+    params:
+      home_team: France
+      away_team: Japan
+      threshold: 2.5
+      direction: over
+      is_neutral: true

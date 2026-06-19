@@ -1,0 +1,72 @@
+# Example Market Config — Template for adding new markets
+#
+# Copy this file, rename it, and add your own markets.
+# The system loads all *.yaml files from configs/markets/ automatically.
+#
+# HOW TO ADD A NEW MARKET:
+# 1. Pick a category from: tournament_winner, reaches_stage, advances_from_group,
+#    group_winner, match_outcome, over_under_goals, both_teams_score, clean_sheet
+# 2. Add an entry below with a unique id, name, category, and params
+# 3. Optionally set market_price to the Kalshi implied probability for comparison
+# 4. Restart the app or reload markets in the UI
+
+markets:
+
+  # ── Correct Score (uses Poisson model) ─────────────────────────────
+  - id: usa_ger_1_1
+    name: "USA vs Germany — Correct Score 1:1"
+    category: correct_score
+    params:
+      home_team: USA
+      away_team: Germany
+      home_goals: 1
+      away_goals: 1
+      is_neutral: true
+
+  # ── Under markets ───────────────────────────────────────────────────
+  - id: spain_nigeria_under15
+    name: "Spain vs Nigeria Under 1.5 Goals"
+    category: over_under_goals
+    params:
+      home_team: Spain
+      away_team: Nigeria
+      threshold: 1.5
+      direction: under
+      is_neutral: true
+
+  # ── Clean sheet ─────────────────────────────────────────────────────
+  - id: france_clean_sheet_vs_japan
+    name: "France keeps clean sheet vs Japan"
+    category: clean_sheet
+    params:
+      team: France
+      home_team: France
+      away_team: Japan
+      is_neutral: true
+
+  # ── BTTS ────────────────────────────────────────────────────────────
+  - id: argentina_poland_btts
+    name: "Argentina vs Poland — Both Teams to Score"
+    category: both_teams_score
+    params:
+      home_team: Argentina
+      away_team: Poland
+      is_neutral: true
+
+  # ── Draw ────────────────────────────────────────────────────────────
+  - id: italy_tunisia_draw
+    name: "Italy vs Tunisia — Draw"
+    category: match_outcome
+    params:
+      home_team: Italy
+      away_team: Tunisia
+      outcome: D
+      is_neutral: true
+
+  # ── Custom: add any Kalshi market you see ───────────────────────────
+  # - id: my_custom_market
+  #   name: "Describe it here"
+  #   category: tournament_winner
+  #   params:
+  #     team: Netherlands
+  #   market_price: 0.05   # paste Kalshi price here
