@@ -1442,10 +1442,10 @@ def _bt_outcome_tab(metrics: dict, match_df: pd.DataFrame, preds: pd.DataFrame) 
 
     # Metrics table
     st.subheader("Model Performance Summary")
-    model_order  = ["ens", "dc", "xgb", "elo", "baseline_uniform"]
+    model_order  = ["ens", "dc", "xgb", "lgbm", "elo", "baseline_uniform"]
     model_labels = {
         "ens": "Ensemble", "dc": "Dixon-Coles", "xgb": "XGBoost",
-        "elo": "Elo", "baseline_uniform": "Baseline (uniform 1/3)",
+        "lgbm": "LightGBM", "elo": "Elo", "baseline_uniform": "Baseline (uniform 1/3)",
     }
     rows = []
     for k in model_order:
