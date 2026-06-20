@@ -1,0 +1,485 @@
+{
+  "winner": [
+    {
+      "team": "Iraq",
+      "ticker": "KXMENWORLDCUP-26-IRQ",
+      "yes_bid": 0.0,
+      "yes_ask": 0.01,
+      "kalshi_mid": 0.01,
+      "kalshi_prob": 0.009324009324009324,
+      "volume": 153460.92,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Congo DR",
+      "ticker": "KXMENWORLDCUP-26-COD",
+      "yes_bid": 0.0,
+      "yes_ask": 0.01,
+      "kalshi_mid": 0.01,
+      "kalshi_prob": 0.009324009324009324,
+      "volume": 191989.92,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Bosnia and Herzegovina",
+      "ticker": "KXMENWORLDCUP-26-BIH",
+      "yes_bid": 0.0,
+      "yes_ask": 0.01,
+      "kalshi_mid": 0.01,
+      "kalshi_prob": 0.009324009324009324,
+      "volume": 381179.75,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Czechia",
+      "ticker": "KXMENWORLDCUP-26-CZE",
+      "yes_bid": 0.0,
+      "yes_ask": 0.01,
+      "kalshi_mid": 0.01,
+      "kalshi_prob": 0.009324009324009324,
+      "volume": 156253.1,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Panama",
+      "ticker": "KXMENWORLDCUP-26-PAN",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 5501692.28,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Haiti",
+      "ticker": "KXMENWORLDCUP-26-HTI",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 7365563.92,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Curacao",
+      "ticker": "KXMENWORLDCUP-26-CUW",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 1210893.0,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Ivory Coast",
+      "ticker": "KXMENWORLDCUP-26-CIV",
+      "yes_bid": 0.004,
+      "yes_ask": 0.005,
+      "kalshi_mid": 0.0045000000000000005,
+      "kalshi_prob": 0.004195804195804197,
+      "volume": 11801778.23,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Qatar",
+      "ticker": "KXMENWORLDCUP-26-QAT",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 1310878.6,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "South Africa",
+      "ticker": "KXMENWORLDCUP-26-RSA",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 1231254.23,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Cape Verde",
+      "ticker": "KXMENWORLDCUP-26-CPV",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 5203439.48,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Algeria",
+      "ticker": "KXMENWORLDCUP-26-DZA",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 6835938.23,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Egypt",
+      "ticker": "KXMENWORLDCUP-26-EGY",
+      "yes_bid": 0.002,
+      "yes_ask": 0.003,
+      "kalshi_mid": 0.0025,
+      "kalshi_prob": 0.002331002331002331,
+      "volume": 7669132.46,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Jordan",
+      "ticker": "KXMENWORLDCUP-26-JOR",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 801860.48,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Uzbekistan",
+      "ticker": "KXMENWORLDCUP-26-UZB",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 2206214.58,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "New Zealand",
+      "ticker": "KXMENWORLDCUP-26-NZL",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 2577105.07,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Tunisia",
+      "ticker": "KXMENWORLDCUP-26-TN",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 998979.3,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Saudi Arabia",
+      "ticker": "KXMENWORLDCUP-26-SA",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 2376023.75,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Iran",
+      "ticker": "KXMENWORLDCUP-26-IR",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 10489101.73,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Turkey",
+      "ticker": "KXMENWORLDCUP-26-TR",
+      "yes_bid": 0.0,
+      "yes_ask": 0.001,
+      "kalshi_mid": 0.001,
+      "kalshi_prob": 0.0009324009324009324,
+      "volume": 8237777.03,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Scotland",
+      "ticker": "KXMENWORLDCUP-26-SC",
+      "yes_bid": 0.001,
+      "yes_ask": 0.002,
+      "kalshi_mid": 0.0015,
+      "kalshi_prob": 0.0013986013986013986,
+      "volume": 6777447.21,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Paraguay",
+      "ticker": "KXMENWORLDCUP-26-PY",
+      "yes_bid": 0.001,
+      "yes_ask": 0.002,
+      "kalshi_mid": 0.0015,
+      "kalshi_prob": 0.0013986013986013986,
+      "volume": 7478713.92,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "South Korea",
+      "ticker": "KXMENWORLDCUP-26-KR",
+      "yes_bid": 0.003,
+      "yes_ask": 0.004,
+      "kalshi_mid": 0.0035,
+      "kalshi_prob": 0.0032634032634032634,
+      "volume": 12287174.61,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Ghana",
+      "ticker": "KXMENWORLDCUP-26-GH",
+      "yes_bid": 0.001,
+      "yes_ask": 0.002,
+      "kalshi_mid": 0.0015,
+      "kalshi_prob": 0.0013986013986013986,
+      "volume": 5918627.81,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Australia",
+      "ticker": "KXMENWORLDCUP-26-AU",
+      "yes_bid": 0.001,
+      "yes_ask": 0.002,
+      "kalshi_mid": 0.0015,
+      "kalshi_prob": 0.0013986013986013986,
+      "volume": 7158117.2,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Senegal",
+      "ticker": "KXMENWORLDCUP-26-SN",
+      "yes_bid": 0.004,
+      "yes_ask": 0.005,
+      "kalshi_mid": 0.0045000000000000005,
+      "kalshi_prob": 0.004195804195804197,
+      "volume": 6840699.45,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Sweden",
+      "ticker": "KXMENWORLDCUP-26-SE",
+      "yes_bid": 0.003,
+      "yes_ask": 0.004,
+      "kalshi_mid": 0.0035,
+      "kalshi_prob": 0.0032634032634032634,
+      "volume": 7609512.42,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Norway",
+      "ticker": "KXMENWORLDCUP-26-NO",
+      "yes_bid": 0.026,
+      "yes_ask": 0.027,
+      "kalshi_mid": 0.0265,
+      "kalshi_prob": 0.024708624708624706,
+      "volume": 9842221.95,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Mexico",
+      "ticker": "KXMENWORLDCUP-26-MX",
+      "yes_bid": 0.018,
+      "yes_ask": 0.019,
+      "kalshi_mid": 0.0185,
+      "kalshi_prob": 0.017249417249417247,
+      "volume": 23902212.92,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Morocco",
+      "ticker": "KXMENWORLDCUP-26-MA",
+      "yes_bid": 0.026,
+      "yes_ask": 0.027,
+      "kalshi_mid": 0.0265,
+      "kalshi_prob": 0.024708624708624706,
+      "volume": 13874126.54,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Japan",
+      "ticker": "KXMENWORLDCUP-26-JP",
+      "yes_bid": 0.013,
+      "yes_ask": 0.014,
+      "kalshi_mid": 0.0135,
+      "kalshi_prob": 0.012587412587412587,
+      "volume": 9782345.02,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Ecuador",
+      "ticker": "KXMENWORLDCUP-26-EC",
+      "yes_bid": 0.003,
+      "yes_ask": 0.004,
+      "kalshi_mid": 0.0035,
+      "kalshi_prob": 0.0032634032634032634,
+      "volume": 9260805.32,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Colombia",
+      "ticker": "KXMENWORLDCUP-26-CO",
+      "yes_bid": 0.017,
+      "yes_ask": 0.018,
+      "kalshi_mid": 0.0175,
+      "kalshi_prob": 0.01631701631701632,
+      "volume": 9769852.49,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Switzerland",
+      "ticker": "KXMENWORLDCUP-26-CH",
+      "yes_bid": 0.008,
+      "yes_ask": 0.009,
+      "kalshi_mid": 0.0085,
+      "kalshi_prob": 0.007925407925407926,
+      "volume": 8366152.72,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Canada",
+      "ticker": "KXMENWORLDCUP-26-CA",
+      "yes_bid": 0.004,
+      "yes_ask": 0.005,
+      "kalshi_mid": 0.0045000000000000005,
+      "kalshi_prob": 0.004195804195804197,
+      "volume": 6996322.61,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Austria",
+      "ticker": "KXMENWORLDCUP-26-AT",
+      "yes_bid": 0.003,
+      "yes_ask": 0.004,
+      "kalshi_mid": 0.0035,
+      "kalshi_prob": 0.0032634032634032634,
+      "volume": 8121763.86,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Uruguay",
+      "ticker": "KXMENWORLDCUP-26-UY",
+      "yes_bid": 0.005,
+      "yes_ask": 0.006,
+      "kalshi_mid": 0.0055,
+      "kalshi_prob": 0.005128205128205128,
+      "volume": 7329580.0,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "USA",
+      "ticker": "KXMENWORLDCUP-26-US",
+      "yes_bid": 0.054,
+      "yes_ask": 0.055,
+      "kalshi_mid": 0.0545,
+      "kalshi_prob": 0.05081585081585081,
+      "volume": 33336050.57,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Portugal",
+      "ticker": "KXMENWORLDCUP-26-PT",
+      "yes_bid": 0.068,
+      "yes_ask": 0.07,
+      "kalshi_mid": 0.069,
+      "kalshi_prob": 0.06433566433566434,
+      "volume": 21893330.06,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Netherlands",
+      "ticker": "KXMENWORLDCUP-26-NL",
+      "yes_bid": 0.04,
+      "yes_ask": 0.041,
+      "kalshi_mid": 0.0405,
+      "kalshi_prob": 0.03776223776223776,
+      "volume": 17580256.83,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Croatia",
+      "ticker": "KXMENWORLDCUP-26-HR",
+      "yes_bid": 0.005,
+      "yes_ask": 0.006,
+      "kalshi_mid": 0.0055,
+      "kalshi_prob": 0.005128205128205128,
+      "volume": 8347454.69,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "England",
+      "ticker": "KXMENWORLDCUP-26-GB",
+      "yes_bid": 0.128,
+      "yes_ask": 0.129,
+      "kalshi_mid": 0.1285,
+      "kalshi_prob": 0.11981351981351981,
+      "volume": 11938460.94,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Germany",
+      "ticker": "KXMENWORLDCUP-26-DE",
+      "yes_bid": 0.06,
+      "yes_ask": 0.061,
+      "kalshi_mid": 0.0605,
+      "kalshi_prob": 0.05641025641025641,
+      "volume": 10890439.39,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Brazil",
+      "ticker": "KXMENWORLDCUP-26-BR",
+      "yes_bid": 0.063,
+      "yes_ask": 0.064,
+      "kalshi_mid": 0.0635,
+      "kalshi_prob": 0.05920745920745921,
+      "volume": 10784473.32,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Belgium",
+      "ticker": "KXMENWORLDCUP-26-BE",
+      "yes_bid": 0.015,
+      "yes_ask": 0.016,
+      "kalshi_mid": 0.0155,
+      "kalshi_prob": 0.014452214452214451,
+      "volume": 7896335.84,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Argentina",
+      "ticker": "KXMENWORLDCUP-26-AR",
+      "yes_bid": 0.107,
+      "yes_ask": 0.108,
+      "kalshi_mid": 0.1075,
+      "kalshi_prob": 0.10023310023310023,
+      "volume": 13143181.26,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "France",
+      "ticker": "KXMENWORLDCUP-26-FR",
+      "yes_bid": 0.189,
+      "yes_ask": 0.19,
+      "kalshi_mid": 0.1895,
+      "kalshi_prob": 0.17668997668997669,
+      "volume": 18731908.55,
+      "close_time": "2028-07-18T14:00:00Z"
+    },
+    {
+      "team": "Spain",
+      "ticker": "KXMENWORLDCUP-26-ES",
+      "yes_bid": 0.131,
+      "yes_ask": 0.132,
+      "kalshi_mid": 0.1315,
+      "kalshi_prob": 0.12261072261072262,
+      "volume": 14005459.78,
+      "close_time": "2028-07-18T14:00:00Z"
+    }
+  ],
+  "fetched_at": "2026-06-20T15:19:35.254667"
+}
