@@ -191,7 +191,7 @@ def main() -> None:
     print_comparison_table(df, overround)
 
     df.to_csv(OUT_FILE, index=False)
-    print(f"\nSaved → {OUT_FILE}")
+    print(f"\nSaved -> {OUT_FILE}")
 
 
 if __name__ == "__main__":

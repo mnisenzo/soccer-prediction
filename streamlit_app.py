@@ -1453,12 +1453,14 @@ def _bt_outcome_tab(metrics: dict, match_df: pd.DataFrame, preds: pd.DataFrame) 
             continue
         m   = outcome[k]
         ci  = f"[{m['rps_ci_lo']:.3f}, {m['rps_ci_hi']:.3f}]"
+        ece = m.get("ece_confidence")
         rows.append({
-            "Model": model_labels.get(k, k),
-            "RPS": round(m["rps_mean"], 4),
-            "95% CI": ci,
-            "Log-Loss": round(m["log_loss"], 4),
-            "Accuracy": f"{m['accuracy']:.1%}",
+            "Model":     model_labels.get(k, k),
+            "RPS":       round(m["rps_mean"], 4),
+            "95% CI":    ci,
+            "Log-Loss":  round(m["log_loss"], 4),
+            "Accuracy":  f"{m['accuracy']:.1%}",
+            "ECE":       f"{ece:.4f}" if ece is not None else "—",
         })
     if rows:
         mdf = pd.DataFrame(rows)
@@ -1485,6 +1487,37 @@ def _bt_outcome_tab(metrics: dict, match_df: pd.DataFrame, preds: pd.DataFrame) 
                 st.warning(f"{msg}\nDifference not yet statistically significant at n={n_matches}.")
             else:
                 st.info(msg)
+
+    # Reliability diagram (calibration curve)
+    cal_bins = outcome.get("ens", {}).get("calibration_bins", [])
+    if cal_bins:
+        st.subheader("Reliability Diagram (Ensemble)")
+        st.caption(
+            "Each dot = one confidence bucket. Perfectly calibrated predictions follow the diagonal. "
+            "Points above the line = underconfident; below = overconfident. "
+            f"ECE = {outcome['ens'].get('ece_confidence', float('nan')):.4f}"
+        )
+        cal_df = pd.DataFrame(cal_bins)
+        fig_cal = go.Figure()
+        fig_cal.add_trace(go.Scatter(
+            x=[0, 1], y=[0, 1], mode="lines",
+            line=dict(dash="dash", color="grey", width=1),
+            name="Perfect calibration",
+        ))
+        fig_cal.add_trace(go.Scatter(
+            x=cal_df["confidence"], y=cal_df["accuracy"],
+            mode="markers+lines",
+            marker=dict(size=cal_df["n"].clip(upper=100) / 10 + 5, color="#3b82f6"),
+            text=[f"n={r['n']}<br>conf={r['confidence']:.3f}<br>acc={r['accuracy']:.3f}" for _, r in cal_df.iterrows()],
+            hoverinfo="text",
+            name="Ensemble",
+        ))
+        fig_cal.update_layout(
+            height=350, xaxis_title="Mean predicted confidence", yaxis_title="Fraction correct",
+            xaxis=dict(range=[0, 1]), yaxis=dict(range=[0, 1]),
+            margin=dict(t=20, b=40), legend=dict(x=0.02, y=0.95),
+        )
+        st.plotly_chart(fig_cal, use_container_width=True)
 
     # RPS bar chart
     if not match_df.empty:

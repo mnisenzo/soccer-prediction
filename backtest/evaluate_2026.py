@@ -55,6 +55,51 @@ def bootstrap_mean_ci(values: np.ndarray, n: int = 10_000, alpha: float = 0.05) 
     return float(np.percentile(boots, 100 * alpha / 2)), float(np.percentile(boots, 100 * (1 - alpha / 2)))
 
 
+def expected_calibration_error(
+    probs: np.ndarray,
+    correct: np.ndarray,
+    n_bins: int = 10,
+) -> tuple[float, list[dict]]:
+    """
+    Confidence-based ECE. probs[i] = model confidence, correct[i] = 1 if that prediction was right.
+    Returns (ece_scalar, bin_data) where bin_data drives reliability diagrams.
+    """
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    n = len(probs)
+    ece = 0.0
+    bin_data: list[dict] = []
+    for i in range(n_bins):
+        lo, hi = bins[i], bins[i + 1]
+        mask = (probs >= lo) & (probs < hi if i < n_bins - 1 else probs <= hi)
+        if mask.sum() == 0:
+            continue
+        bin_conf = float(probs[mask].mean())
+        bin_acc  = float(correct[mask].mean())
+        bin_n    = int(mask.sum())
+        ece += (bin_n / n) * abs(bin_acc - bin_conf)
+        bin_data.append({
+            "bin_mid": round((lo + hi) / 2, 3),
+            "confidence": round(bin_conf, 4),
+            "accuracy":   round(bin_acc, 4),
+            "n":          bin_n,
+        })
+    return round(ece, 6), bin_data
+
+
+def per_class_ece(
+    p_win: np.ndarray,
+    p_draw: np.ndarray,
+    p_loss: np.ndarray,
+    outcomes: np.ndarray,
+    n_bins: int = 10,
+) -> dict[str, float]:
+    """Per-class binary ECE treating each 1X2 outcome as a binary calibration problem."""
+    ece_w, _ = expected_calibration_error(p_win,  (outcomes == 2).astype(float), n_bins)
+    ece_d, _ = expected_calibration_error(p_draw, (outcomes == 1).astype(float), n_bins)
+    ece_l, _ = expected_calibration_error(p_loss, (outcomes == 0).astype(float), n_bins)
+    return {"win": ece_w, "draw": ece_d, "loss": ece_l, "mean": round((ece_w + ece_d + ece_l) / 3, 6)}
+
+
 # ─── Model definitions ────────────────────────────────────────────────────────
 
 MODELS = {
@@ -83,11 +128,22 @@ def evaluate_outcomes(merged: pd.DataFrame) -> dict[str, dict]:
         if sub.empty:
             continue
 
+        p_w = sub[ca].values.astype(float)
+        p_d = sub[cd].values.astype(float)
+        p_l = sub[cb].values.astype(float)
+        outs = sub["outcome"].values.astype(int)
+
         rps_vals = np.array([rps(r[ca], r[cd], r[cb], r["outcome"]) for _, r in sub.iterrows()])
         ll_vals  = np.array([log_loss_score(r[ca], r[cd], r[cb], r["outcome"]) for _, r in sub.iterrows()])
-        preds    = [predicted_outcome(r[ca], r[cd], r[cb]) for _, r in sub.iterrows()]
-        acc      = float(np.mean(np.array(preds) == sub["outcome"].values))
+        preds    = np.array([predicted_outcome(r[ca], r[cd], r[cb]) for _, r in sub.iterrows()])
+        acc      = float(np.mean(preds == outs))
         ci       = bootstrap_mean_ci(rps_vals)
+
+        # ECE: confidence = max predicted prob; correct = argmax matches actual
+        max_probs = np.stack([p_w, p_d, p_l], axis=1).max(axis=1)
+        correct   = (preds == outs).astype(float)
+        ece_conf, cal_bins = expected_calibration_error(max_probs, correct)
+        ece_per_class = per_class_ece(p_w, p_d, p_l, outs)
 
         results[name] = {
             "n": len(sub),
@@ -97,6 +153,9 @@ def evaluate_outcomes(merged: pd.DataFrame) -> dict[str, dict]:
             "rps_per_match": rps_vals.tolist(),
             "log_loss":    float(ll_vals.mean()),
             "accuracy":    acc,
+            "ece_confidence": ece_conf,
+            "ece_per_class":  ece_per_class,
+            "calibration_bins": cal_bins,
         }
 
     # Uniform baseline
@@ -336,8 +395,8 @@ def main() -> None:
     print("=" * 70)
     print()
     print("OUTCOME PREDICTION")
-    print(f"{'':22} {'RPS':>7}  {'Log-Loss':>10}  {'Accuracy':>8}")
-    print("-" * 55)
+    print(f"{'':22} {'RPS':>7}  {'Log-Loss':>10}  {'Accuracy':>8}  {'ECE':>7}")
+    print("-" * 65)
     order  = ["dc", "xgb", "elo", "ens", "baseline_uniform"]
     labels = {"dc": "Dixon-Coles", "xgb": "XGBoost", "elo": "Elo",
                "ens": "Ensemble", "baseline_uniform": "Baseline (uniform)"}
@@ -345,7 +404,8 @@ def main() -> None:
         if k not in outcome_metrics:
             continue
         m = outcome_metrics[k]
-        print(f"  {labels[k]:<20} {m['rps_mean']:>7.4f}  {m['log_loss']:>10.4f}  {m['accuracy']:>7.1%}")
+        ece_str = f"{m.get('ece_confidence', float('nan')):.4f}" if "ece_confidence" in m else "  n/a"
+        print(f"  {labels[k]:<20} {m['rps_mean']:>7.4f}  {m['log_loss']:>10.4f}  {m['accuracy']:>7.1%}  {ece_str:>7}")
 
     # Bootstrap CI
     if "ens" in outcome_metrics and "baseline_uniform" in outcome_metrics:
@@ -396,13 +456,13 @@ def main() -> None:
 
     with open(METRICS_FILE, "w") as f:
         json.dump(_clean(combined), f, indent=2)
-    print(f"\nMetrics saved → {METRICS_FILE}")
+    print(f"\nMetrics saved -> {METRICS_FILE}")
 
     # Per-match RPS CSV for Streamlit
     upsets_df = detect_upsets(merged)
     rps_path  = BACKTEST_DIR / "match_rps_2026.csv"
     upsets_df.to_csv(rps_path, index=False)
-    print(f"Per-match RPS → {rps_path}")
+    print(f"Per-match RPS -> {rps_path}")
 
 
 if __name__ == "__main__":

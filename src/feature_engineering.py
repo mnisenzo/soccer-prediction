@@ -63,7 +63,7 @@ CONFEDERATION_MAP = {
     "Brazil": "CONMEBOL", "Argentina": "CONMEBOL", "Colombia": "CONMEBOL",
     "Uruguay": "CONMEBOL", "Ecuador": "CONMEBOL", "Paraguay": "CONMEBOL",
     "Bolivia": "CONMEBOL", "Venezuela": "CONMEBOL", "Peru": "CONMEBOL",
-    "Chile": "CONMEBOL", "Algeria": "CONMEBOL",
+    "Chile": "CONMEBOL",
     "USA": "CONCACAF", "Canada": "CONCACAF", "Mexico": "CONCACAF",
     "Panama": "CONCACAF", "Jamaica": "CONCACAF", "Costa Rica": "CONCACAF",
     "Curacao": "CONCACAF", "Haiti": "CONCACAF",
@@ -74,7 +74,7 @@ CONFEDERATION_MAP = {
     "Tunisia": "CAF", "Congo DR": "CAF", "Mali": "CAF", "Cameroon": "CAF",
     "Algeria": "CAF", "Cabo Verde": "CAF",
     "New Zealand": "OFC",
-    "Jordan": "AFC", "Czechia": "UEFA",
+    "Jordan": "AFC", "Czechia": "UEFA", "Uzbekistan": "AFC",
 }
 
 
@@ -92,18 +92,26 @@ def _importance(tournament: str) -> float:
     return 1.0
 
 
-def compute_elo_ratings(results_df: pd.DataFrame) -> dict[str, float]:
+def compute_elo_ratings(
+    results_df: pd.DataFrame,
+    cutoff: Optional[pd.Timestamp] = None,
+) -> dict[str, float]:
     """
-    Compute current Elo ratings by replaying match history from 1990 onward.
+    Compute Elo ratings by replaying match history from 1990 onward.
 
+    Args:
+        cutoff: if provided, exclude matches on or after this date (leakage guard).
     Returns dict mapping team name → current Elo rating.
     """
     ratings: dict[str, float] = {}
-    cutoff = pd.Timestamp("1990-01-01")
+    start_cutoff = pd.Timestamp("1990-01-01")
 
     df = results_df.copy()
     df["date"] = pd.to_datetime(df["date"])
-    df = df[df["date"] >= cutoff].sort_values("date")
+    df = df[df["date"] >= start_cutoff]
+    if cutoff is not None:
+        df = df[df["date"] < cutoff]
+    df = df.sort_values("date")
 
     for _, row in df.iterrows():
         home = str(row["home_team"])

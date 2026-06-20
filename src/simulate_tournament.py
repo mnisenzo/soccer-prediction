@@ -179,6 +179,10 @@ def load_models() -> dict:
                 feat_cols = json.load(f)["feature_cols"]
             models["xgb"] = (m, feat_cols)
             log.info("Loaded XGBoost model")
+            # Precompute real form features — fixes the hardcoded-constants bug
+            xgb_feats = _precompute_xgb_team_features(_TOURNAMENT_CUTOFF)
+            if xgb_feats:
+                models["xgb_features"] = xgb_feats
         except Exception as e:
             log.warning("Could not load XGBoost: %s", e)
 
@@ -267,6 +271,101 @@ def _elo_probs(elo_ratings: dict, team_a: str, team_b: str) -> dict:
     }
 
 
+def _dc_joint_matrix(dc_params: dict, team_a: str, team_b: str, is_neutral: bool = True) -> np.ndarray:
+    """Return the 9x9 DC joint score probability matrix (normalised)."""
+    from scipy.stats import poisson as sp_poisson
+    attack  = dc_params["attack"]
+    defense = dc_params["defense"]
+    rho     = dc_params["rho"]
+    home_adv = 0.0 if is_neutral else dc_params["home_advantage"]
+    mean_a  = float(np.mean(list(attack.values())))
+    mean_d  = float(np.mean(list(defense.values())))
+    ta, tb  = _canonical(team_a), _canonical(team_b)
+
+    lam = max(0.01, float(np.exp(attack.get(ta, mean_a) - defense.get(tb, mean_d) + home_adv)))
+    mu  = max(0.01, float(np.exp(attack.get(tb, mean_a) - defense.get(ta, mean_d))))
+
+    joint = np.outer(sp_poisson.pmf(_SCORES, lam), sp_poisson.pmf(_SCORES, mu))
+    joint[0, 0] *= max(1e-10, 1.0 - lam * mu * rho)
+    joint[1, 0] *= max(1e-10, 1.0 + mu * rho)
+    joint[0, 1] *= max(1e-10, 1.0 + lam * rho)
+    joint[1, 1] *= max(1e-10, 1.0 - rho)
+    joint /= joint.sum()
+    return joint
+
+
+def _sample_score_from_dc(
+    dc_params: dict,
+    team_a: str,
+    team_b: str,
+    rng: np.random.Generator,
+    allow_draw: bool = True,
+) -> tuple[int, int]:
+    """Sample (goals_a, goals_b) from the DC joint score distribution."""
+    joint = _dc_joint_matrix(dc_params, team_a, team_b)
+    if not allow_draw:
+        draw_mask = np.eye(len(_SCORES), dtype=bool)
+        joint[draw_mask] = 0.0
+        s = joint.sum()
+        joint = joint / s if s > 1e-9 else np.full_like(joint, 1.0 / joint.size)
+    flat = joint.flatten()
+    idx = rng.choice(len(flat), p=flat)
+    return divmod(idx, len(_SCORES))
+
+
+_TOURNAMENT_CUTOFF = pd.Timestamp("2026-06-11")
+_CONF_ENC = {"UEFA": 0, "CONMEBOL": 1, "CONCACAF": 2, "AFC": 3, "CAF": 4, "OFC": 5, "OTHER": 6}
+
+
+def _precompute_xgb_team_features(cutoff: pd.Timestamp) -> dict[str, dict]:
+    """
+    Load historical results and compute form features for all WC 2026 teams
+    as of cutoff. Returns {team_name: feature_dict} using system team names.
+    """
+    results_path = RAW_DIR / "international_results.csv"
+    if not results_path.exists():
+        log.warning("Cannot precompute XGB features: %s not found", results_path)
+        return {}
+
+    try:
+        sys.path.insert(0, str(PROJECT_ROOT / "src"))
+        from feature_engineering import compute_rolling_form, _last_match_date, CONFEDERATION_MAP
+    except ImportError as e:
+        log.warning("Cannot import feature_engineering for XGB features: %s", e)
+        return {}
+
+    log.info("Precomputing XGB team features from historical results ...")
+    df = pd.read_csv(results_path)
+    df.columns = df.columns.str.strip()
+    if "home_score" not in df.columns and "home_goals" in df.columns:
+        df = df.rename(columns={"home_goals": "home_score", "away_goals": "away_score"})
+    df["date"] = pd.to_datetime(df["date"])
+    df = df[df["date"] < cutoff].copy()
+
+    all_teams = {t for teams in WC2026_GROUPS.values() for t in teams}
+    features: dict[str, dict] = {}
+    for team in all_teams:
+        canon = _canonical(team)
+        form = compute_rolling_form(df, canon, cutoff, n_matches=10)
+        last = _last_match_date(df, canon, cutoff)
+        days_since = int((cutoff - last).days) if last else 90
+        conf = CONFEDERATION_MAP.get(canon, CONFEDERATION_MAP.get(team, "OTHER"))
+        features[team] = {
+            "win_rate":     form["win_rate"],
+            "draw_rate":    form["draw_rate"],
+            "loss_rate":    form["loss_rate"],
+            "avg_gf":       form["avg_gf"],
+            "avg_ga":       form["avg_ga"],
+            "pts_per_game": form["pts_per_game"],
+            "days_since_last": days_since,
+            "confederation":   conf,
+            "conf_enc":        _CONF_ENC.get(conf, 6),
+        }
+
+    log.info("XGB features ready for %d teams", len(features))
+    return features
+
+
 _ENSEMBLE_CACHE: dict[tuple, dict] = {}
 
 
@@ -312,17 +411,35 @@ def get_match_probs(
         ca, cb = _canonical(team_a), _canonical(team_b)
         r_a = elo_ratings.get(ca, elo_ratings.get(team_a, 1500.0))
         r_b = elo_ratings.get(cb, elo_ratings.get(team_b, 1500.0))
+
+        # Use precomputed per-team form features (fixed: no longer hardcoded constants)
+        xgb_feats = models.get("xgb_features", {})
+        fa = xgb_feats.get(team_a, xgb_feats.get(ca, {}))
+        fb = xgb_feats.get(team_b, xgb_feats.get(cb, {}))
+        same_conf = int(fa.get("confederation", "A") == fb.get("confederation", "B"))
+
         feature_row = {
             "elo_home": r_a, "elo_away": r_b, "elo_diff": r_a - r_b,
             "fifa_pts_home": 1000.0, "fifa_pts_away": 1000.0, "fifa_pts_diff": 0.0,
-            "form_win_home": 0.5, "form_draw_home": 0.2, "form_loss_home": 0.3,
-            "form_avg_gf_home": 1.5, "form_avg_ga_home": 1.2, "form_pts_home": 1.7,
-            "form_win_away": 0.5, "form_draw_away": 0.2, "form_loss_away": 0.3,
-            "form_avg_gf_away": 1.5, "form_avg_ga_away": 1.2, "form_pts_away": 1.7,
-            "same_confederation": 0, "is_neutral": int(is_neutral), "importance": 4.0,
-            "days_since_last_home": 7, "days_since_last_away": 7,
+            "form_win_home":    fa.get("win_rate", 0.5),
+            "form_draw_home":   fa.get("draw_rate", 0.2),
+            "form_loss_home":   fa.get("loss_rate", 0.3),
+            "form_avg_gf_home": fa.get("avg_gf", 1.5),
+            "form_avg_ga_home": fa.get("avg_ga", 1.2),
+            "form_pts_home":    fa.get("pts_per_game", 1.7),
+            "form_win_away":    fb.get("win_rate", 0.5),
+            "form_draw_away":   fb.get("draw_rate", 0.2),
+            "form_loss_away":   fb.get("loss_rate", 0.3),
+            "form_avg_gf_away": fb.get("avg_gf", 1.5),
+            "form_avg_ga_away": fb.get("avg_ga", 1.2),
+            "form_pts_away":    fb.get("pts_per_game", 1.7),
+            "same_confederation": same_conf,
+            "is_neutral": int(is_neutral), "importance": 4.0,
+            "days_since_last_home": fa.get("days_since_last", 7),
+            "days_since_last_away": fb.get("days_since_last", 7),
             "h2h_home_wins": 0, "h2h_draws": 0, "h2h_away_wins": 0,
-            "conf_home_enc": 0, "conf_away_enc": 0,
+            "conf_home_enc": fa.get("conf_enc", 6),
+            "conf_away_enc": fb.get("conf_enc", 6),
         }
         row = np.array([feature_row.get(c, 0.0) for c in feat_cols], dtype=float).reshape(1, -1)
         probs = xgb_model.predict_proba(row)[0]
@@ -401,8 +518,12 @@ def simulate_group_stage(
         for team_a, team_b in combinations(teams, 2):
             if frozenset([team_a, team_b]) in completed_pairs:
                 continue  # already played
-            probs = get_match_probs(models, team_a, team_b, is_neutral=True)
-            hg, ag = _sample_score(probs, rng, allow_draw=True)
+            if "dc" in models:
+                # Sample from DC joint distribution — scores are consistent with win probs
+                hg, ag = _sample_score_from_dc(models["dc"], team_a, team_b, rng, allow_draw=True)
+            else:
+                probs = get_match_probs(models, team_a, team_b, is_neutral=True)
+                hg, ag = _sample_score(probs, rng, allow_draw=True)
             _update_standing(standings[team_a], hg, ag)
             _update_standing(standings[team_b], ag, hg)
 
@@ -462,13 +583,8 @@ def simulate_knockout(
                 total = 1.0
                 p_hw = 0.5
 
-            # For knockout, no draws — 20% extra-time/pens if close
+            # Knockout: renormalize over home/away win only (draw impossible)
             p_hw_norm = p_hw / total
-            diff = abs(2 * p_hw_norm - 1)
-            if diff < 0.20:  # teams within 10pp of each other
-                p_hw_norm = rng.random()  # essentially coin flip with bias
-                p_hw_norm = p_hw_norm * 0.6 + 0.2  # clamp to [0.2, 0.8]
-
             winner = home if rng.random() < p_hw_norm else away
             loser = away if winner == home else home
             exit_stage[loser] = stage

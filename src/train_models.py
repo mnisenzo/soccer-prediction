@@ -435,7 +435,7 @@ def main() -> None:
     log.info("Computing Elo ratings ...")
     sys.path.insert(0, str(Path(__file__).parent))
     from feature_engineering import compute_elo_ratings
-    elo_ratings = compute_elo_ratings(results_df)
+    elo_ratings = compute_elo_ratings(results_df, cutoff=TOURNAMENT_CUTOFF)
 
     elo_path = MODELS_DIR / "elo_ratings.json"
     with open(elo_path, "w") as f:

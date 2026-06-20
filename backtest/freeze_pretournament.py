@@ -2,16 +2,15 @@
 Generate and freeze pre-tournament predictions for all 72 WC 2026 group-stage matches.
 
 IMPORTANT: Once generated, pretournament_predictions.csv is IMMUTABLE.
-           This script refuses to overwrite it — re-runs just reload the file.
+           This script refuses to overwrite it unless --force is passed.
 
 Usage:
-    python backtest/freeze_pretournament.py
-
-Output:
-    backtest/pretournament_predictions.csv
+    python backtest/freeze_pretournament.py           # generate once (immutable)
+    python backtest/freeze_pretournament.py --force   # regenerate (wipes old freeze)
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -28,16 +27,30 @@ from constants import (
     BACKTEST_DIR, MODELS_DIR, WC2026_GROUPS,
     get_all_group_fixtures, to_training_name,
 )
+from markets import score_matrix_markets
 
 OUT_FILE = BACKTEST_DIR / "pretournament_predictions.csv"
 FREEZE_MARKER = BACKTEST_DIR / ".predictions_frozen"
+
+_TOURNAMENT_CUTOFF = pd.Timestamp("2026-06-11")
+_CONF_ENC = {"UEFA": 0, "CONMEBOL": 1, "CONCACAF": 2, "AFC": 3, "CAF": 4, "OFC": 5, "OTHER": 6}
+
+# Binary market columns derived from the DC joint matrix (novel — not duplicating dc_win_a/b/draw)
+_MKT_COLS = [
+    "dc_over_0_5", "dc_over_1_5", "dc_over_2_5", "dc_over_3_5", "dc_over_4_5",
+    "dc_btts", "dc_home_scores", "dc_away_scores",
+    "dc_home_cs", "dc_away_cs",
+    "dc_home_2plus", "dc_away_2plus",
+    "dc_home_3plus", "dc_away_3plus",
+]
 
 
 # ─── DC helpers ───────────────────────────────────────────────────────────────
 
 def _dc_probs_and_xg(dc: dict, team_a: str, team_b: str) -> dict:
     """
-    Compute Dixon-Coles win/draw/loss + xG + modal score + full scoreline matrix.
+    Compute Dixon-Coles win/draw/loss + xG + modal score + full scoreline matrix
+    + binary market probabilities derived from the score matrix.
     All on neutral ground (no home_adv).
     """
     from scipy.stats import poisson
@@ -85,6 +98,9 @@ def _dc_probs_and_xg(dc: dict, team_a: str, team_b: str) -> dict:
     modal_idx = np.unravel_index(joint.argmax(), joint.shape)
     pred_score_a, pred_score_b = int(modal_idx[0]), int(modal_idx[1])
 
+    # Binary markets from score matrix
+    mkt = score_matrix_markets(joint)
+
     return {
         "dc_win_a":        p_win,
         "dc_draw":         p_draw,
@@ -94,6 +110,21 @@ def _dc_probs_and_xg(dc: dict, team_a: str, team_b: str) -> dict:
         "dc_pred_score_a": pred_score_a,
         "dc_pred_score_b": pred_score_b,
         "dc_scoreline_probs": json.dumps([[round(float(joint[i, j]), 6) for j in range(8)] for i in range(8)]),
+        # Binary markets (prefixed dc_ = derived from DC joint matrix)
+        "dc_over_0_5":    mkt["over_0_5"],
+        "dc_over_1_5":    mkt["over_1_5"],
+        "dc_over_2_5":    mkt["over_2_5"],
+        "dc_over_3_5":    mkt["over_3_5"],
+        "dc_over_4_5":    mkt["over_4_5"],
+        "dc_btts":        mkt["btts"],
+        "dc_home_scores": mkt["home_scores"],
+        "dc_away_scores": mkt["away_scores"],
+        "dc_home_cs":     mkt["home_cs"],
+        "dc_away_cs":     mkt["away_cs"],
+        "dc_home_2plus":  mkt["home_2plus"],
+        "dc_away_2plus":  mkt["away_2plus"],
+        "dc_home_3plus":  mkt["home_3plus"],
+        "dc_away_3plus":  mkt["away_3plus"],
     }
 
 
@@ -113,13 +144,58 @@ def _elo_probs(elo: dict, team_a: str, team_b: str) -> dict:
     }
 
 
+# ─── XGBoost team feature precomputation ─────────────────────────────────────
+
+def _precompute_team_features(cutoff: pd.Timestamp) -> dict[str, dict]:
+    """
+    Compute real rolling form features for every WC 2026 team from historical
+    results up to cutoff. Replaces the hardcoded population-mean constants.
+    """
+    results_path = PROJECT_ROOT / "data" / "raw" / "international_results.csv"
+    if not results_path.exists():
+        print(f"  Warning: {results_path} not found — XGB will use fallback constants")
+        return {}
+
+    try:
+        from feature_engineering import compute_rolling_form, _last_match_date, CONFEDERATION_MAP
+    except ImportError as e:
+        print(f"  Warning: cannot import feature_engineering for XGB features: {e}")
+        return {}
+
+    df = pd.read_csv(results_path)
+    df.columns = df.columns.str.strip()
+    if "home_score" not in df.columns and "home_goals" in df.columns:
+        df = df.rename(columns={"home_goals": "home_score", "away_goals": "away_score"})
+    df["date"] = pd.to_datetime(df["date"])
+    df = df[df["date"] < cutoff].copy()
+
+    all_teams = {t for teams in WC2026_GROUPS.values() for t in teams}
+    features: dict[str, dict] = {}
+    for team in all_teams:
+        form = compute_rolling_form(df, team, cutoff, n_matches=10)
+        last = _last_match_date(df, team, cutoff)
+        days_since = int((cutoff - last).days) if last else 90
+        conf = CONFEDERATION_MAP.get(team, "OTHER")
+        features[team] = {
+            "win_rate":        form["win_rate"],
+            "draw_rate":       form["draw_rate"],
+            "loss_rate":       form["loss_rate"],
+            "avg_gf":          form["avg_gf"],
+            "avg_ga":          form["avg_ga"],
+            "pts_per_game":    form["pts_per_game"],
+            "days_since_last": days_since,
+            "confederation":   conf,
+            "conf_enc":        _CONF_ENC.get(conf, 6),
+        }
+
+    print(f"  XGB features precomputed for {len(features)} teams")
+    return features
+
+
 # ─── Ensemble ─────────────────────────────────────────────────────────────────
 
 def _ensemble(dc_p: dict, elo_p: dict, xgb_p: dict | None) -> dict:
-    """
-    Weighted ensemble: DC=0.40, XGB=0.40, Elo=0.20.
-    If XGB unavailable, re-weight to DC=0.667, Elo=0.333.
-    """
+    """Weighted ensemble: DC=0.40, XGB=0.40, Elo=0.20. Falls back to DC=0.667, Elo=0.333."""
     if xgb_p:
         weights = {"dc": 0.40, "xgb": 0.40, "elo": 0.20}
         ens_a = weights["dc"] * dc_p["dc_win_a"] + weights["xgb"] * xgb_p["xgb_win_a"] + weights["elo"] * elo_p["elo_win_a"]
@@ -158,23 +234,47 @@ def _load_xgb():
         return None, None
 
 
-def _xgb_probs(model, feat_cols: list, elo: dict, team_a: str, team_b: str) -> dict | None:
+def _xgb_probs(
+    model,
+    feat_cols: list,
+    elo: dict,
+    team_features: dict,
+    team_a: str,
+    team_b: str,
+) -> dict | None:
+    """XGBoost prediction using real per-team form features."""
     if model is None:
         return None
     ta, tb = to_training_name(team_a), to_training_name(team_b)
     r_a = elo.get(ta, 1500.0)
     r_b = elo.get(tb, 1500.0)
+
+    fa = team_features.get(team_a, team_features.get(ta, {}))
+    fb = team_features.get(team_b, team_features.get(tb, {}))
+    same_conf = int(fa.get("confederation", "A") == fb.get("confederation", "B"))
+
     row = {
         "elo_home": r_a, "elo_away": r_b, "elo_diff": r_a - r_b,
         "fifa_pts_home": 1000.0, "fifa_pts_away": 1000.0, "fifa_pts_diff": 0.0,
-        "form_win_home": 0.5, "form_draw_home": 0.2, "form_loss_home": 0.3,
-        "form_avg_gf_home": 1.5, "form_avg_ga_home": 1.2, "form_pts_home": 1.7,
-        "form_win_away": 0.5, "form_draw_away": 0.2, "form_loss_away": 0.3,
-        "form_avg_gf_away": 1.5, "form_avg_ga_away": 1.2, "form_pts_away": 1.7,
-        "same_confederation": 0, "is_neutral": 1, "importance": 4.0,
-        "days_since_last_home": 7, "days_since_last_away": 7,
+        "form_win_home":    fa.get("win_rate",      0.5),
+        "form_draw_home":   fa.get("draw_rate",     0.2),
+        "form_loss_home":   fa.get("loss_rate",     0.3),
+        "form_avg_gf_home": fa.get("avg_gf",        1.5),
+        "form_avg_ga_home": fa.get("avg_ga",        1.2),
+        "form_pts_home":    fa.get("pts_per_game",  1.7),
+        "form_win_away":    fb.get("win_rate",      0.5),
+        "form_draw_away":   fb.get("draw_rate",     0.2),
+        "form_loss_away":   fb.get("loss_rate",     0.3),
+        "form_avg_gf_away": fb.get("avg_gf",        1.5),
+        "form_avg_ga_away": fb.get("avg_ga",        1.2),
+        "form_pts_away":    fb.get("pts_per_game",  1.7),
+        "same_confederation": same_conf,
+        "is_neutral": 1, "importance": 4.0,
+        "days_since_last_home": fa.get("days_since_last", 7),
+        "days_since_last_away": fb.get("days_since_last", 7),
         "h2h_home_wins": 0, "h2h_draws": 0, "h2h_away_wins": 0,
-        "conf_home_enc": 0, "conf_away_enc": 0,
+        "conf_home_enc": fa.get("conf_enc", 6),
+        "conf_away_enc": fb.get("conf_enc", 6),
     }
     x = np.array([row.get(c, 0.0) for c in feat_cols], dtype=float).reshape(1, -1)
     p = model.predict_proba(x)[0]
@@ -183,17 +283,23 @@ def _xgb_probs(model, feat_cols: list, elo: dict, team_a: str, team_b: str) -> d
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
-def generate_pretournament_predictions() -> pd.DataFrame:
+def generate_pretournament_predictions(force: bool = False) -> pd.DataFrame:
     """
     Generate predictions for all 72 WC 2026 group-stage matches.
-    IMMUTABLE: refuses to overwrite if file already exists.
+    Pass force=True to wipe and regenerate an existing freeze.
     """
     BACKTEST_DIR.mkdir(exist_ok=True)
 
-    if OUT_FILE.exists():
-        print(f"Predictions already frozen at {OUT_FILE}. Not overwriting.")
-        print("Delete the file manually if you genuinely need to regenerate.")
+    if OUT_FILE.exists() and not force:
+        print(f"Predictions already frozen at {OUT_FILE}.")
+        print("Pass --force to regenerate (wipes existing freeze).")
         return pd.read_csv(OUT_FILE)
+
+    if OUT_FILE.exists() and force:
+        OUT_FILE.unlink()
+        if FREEZE_MARKER.exists():
+            FREEZE_MARKER.unlink()
+        print("Wiped existing freeze — regenerating ...")
 
     # Load models
     dc_path = MODELS_DIR / "dixon_coles_params.json"
@@ -212,6 +318,10 @@ def generate_pretournament_predictions() -> pd.DataFrame:
     xgb_model, feat_cols = _load_xgb()
     xgb_available = xgb_model is not None
     print(f"Models loaded: DC + Elo" + (" + XGBoost" if xgb_available else " (XGBoost not found)"))
+
+    # Precompute real form features for all WC 2026 teams
+    team_features = _precompute_team_features(_TOURNAMENT_CUTOFF)
+
     print(f"Ensemble weights: DC={'40%' if xgb_available else '66.7%'}  "
           f"XGB={'40%' if xgb_available else 'N/A'}  "
           f"Elo={'20%' if xgb_available else '33.3%'}")
@@ -227,7 +337,7 @@ def generate_pretournament_predictions() -> pd.DataFrame:
 
         dc_p = _dc_probs_and_xg(dc, ta, tb)
         elo_p = _elo_probs(elo, ta, tb)
-        xgb_p = _xgb_probs(xgb_model, feat_cols, elo, ta, tb) if xgb_available else None
+        xgb_p = _xgb_probs(xgb_model, feat_cols, elo, team_features, ta, tb) if xgb_available else None
         ens_p = _ensemble(dc_p, elo_p, xgb_p)
 
         row: dict = {
@@ -246,25 +356,38 @@ def generate_pretournament_predictions() -> pd.DataFrame:
     df = pd.DataFrame(rows)
     col_order = [
         "match_id", "date", "group", "team_a", "team_b",
+        # DC 1X2 + xG
         "dc_win_a", "dc_draw", "dc_win_b", "dc_xg_a", "dc_xg_b",
         "dc_pred_score_a", "dc_pred_score_b", "dc_scoreline_probs",
+        # DC binary markets
+        *_MKT_COLS,
+        # XGBoost
         "xgb_win_a", "xgb_draw", "xgb_win_b",
+        # Elo
         "elo_win_a", "elo_draw", "elo_win_b",
+        # Ensemble
         "ens_win_a", "ens_draw", "ens_win_b",
     ]
     df = df[col_order]
     df.to_csv(OUT_FILE, index=False)
 
-    # Write freeze marker
     FREEZE_MARKER.write_text(
         f"Frozen predictions generated. {len(df)} fixtures. "
-        f"XGBoost={'included' if xgb_available else 'omitted'}."
+        f"XGBoost={'included' if xgb_available else 'omitted'}. "
+        f"Markets={len(_MKT_COLS)} binary columns."
     )
 
-    print(f"Saved frozen predictions to {OUT_FILE}")
+    print(f"\nSaved frozen predictions to {OUT_FILE}")
     print(f"Sample (Group A):\n{df[df['group']=='A'][['team_a','team_b','dc_win_a','dc_draw','dc_win_b','ens_win_a','ens_win_b']].to_string(index=False)}")
     return df
 
 
 if __name__ == "__main__":
-    generate_pretournament_predictions()
+    parser = argparse.ArgumentParser(description="Freeze pre-tournament WC 2026 predictions")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate even if predictions are already frozen",
+    )
+    args = parser.parse_args()
+    generate_pretournament_predictions(force=args.force)
