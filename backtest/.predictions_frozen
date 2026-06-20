@@ -1,1 +1,1 @@
-Frozen predictions generated. 72 fixtures. XGBoost=omitted. Markets=14 binary columns.
+Frozen predictions generated. 72 fixtures. XGBoost=included. LightGBM=included. Markets=14 binary columns.

@@ -118,6 +118,8 @@ def evaluate_outcomes(merged: pd.DataFrame) -> dict[str, dict]:
     all_models = dict(MODELS)
     if "xgb_win_a" in merged.columns and merged["xgb_win_a"].notna().any():
         all_models["xgb"] = ("xgb_win_a", "xgb_draw", "xgb_win_b")
+    if "lgbm_win_a" in merged.columns and merged["lgbm_win_a"].notna().any():
+        all_models["lgbm"] = ("lgbm_win_a", "lgbm_draw", "lgbm_win_b")
 
     results: dict[str, dict] = {}
 
@@ -397,9 +399,9 @@ def main() -> None:
     print("OUTCOME PREDICTION")
     print(f"{'':22} {'RPS':>7}  {'Log-Loss':>10}  {'Accuracy':>8}  {'ECE':>7}")
     print("-" * 65)
-    order  = ["dc", "xgb", "elo", "ens", "baseline_uniform"]
-    labels = {"dc": "Dixon-Coles", "xgb": "XGBoost", "elo": "Elo",
-               "ens": "Ensemble", "baseline_uniform": "Baseline (uniform)"}
+    order  = ["dc", "xgb", "lgbm", "elo", "ens", "baseline_uniform"]
+    labels = {"dc": "Dixon-Coles", "xgb": "XGBoost", "lgbm": "LightGBM",
+               "elo": "Elo", "ens": "Ensemble", "baseline_uniform": "Baseline (uniform)"}
     for k in order:
         if k not in outcome_metrics:
             continue

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pickle
 import sys
 from pathlib import Path
 
@@ -194,30 +195,77 @@ def _precompute_team_features(cutoff: pd.Timestamp) -> dict[str, dict]:
 
 # ─── Ensemble ─────────────────────────────────────────────────────────────────
 
-def _ensemble(dc_p: dict, elo_p: dict, xgb_p: dict | None) -> dict:
-    """Weighted ensemble: DC=0.40, XGB=0.40, Elo=0.20. Falls back to DC=0.667, Elo=0.333."""
-    if xgb_p:
-        weights = {"dc": 0.40, "xgb": 0.40, "elo": 0.20}
-        ens_a = weights["dc"] * dc_p["dc_win_a"] + weights["xgb"] * xgb_p["xgb_win_a"] + weights["elo"] * elo_p["elo_win_a"]
-        ens_d = weights["dc"] * dc_p["dc_draw"]  + weights["xgb"] * xgb_p["xgb_draw"]  + weights["elo"] * elo_p["elo_draw"]
-        ens_b = weights["dc"] * dc_p["dc_win_b"] + weights["xgb"] * xgb_p["xgb_win_b"] + weights["elo"] * elo_p["elo_win_b"]
+def _load_ensemble_weights(has_xgb: bool, has_lgbm: bool) -> dict:
+    ew_path = MODELS_DIR / "ensemble_weights.json"
+    if ew_path.exists():
+        with open(ew_path) as f:
+            ew = json.load(f)
+        print(f"  Ensemble weights from file: DC={ew.get('dc',0):.2f} XGB={ew.get('xgb',0):.2f} "
+              f"LGBM={ew.get('lgbm',0):.2f} Elo={ew.get('elo',0):.2f}")
+        return ew
+    # Default weights
+    if has_xgb and has_lgbm:
+        return {"dc": 0.35, "xgb": 0.30, "lgbm": 0.15, "elo": 0.20}
+    elif has_xgb:
+        return {"dc": 0.40, "xgb": 0.40, "elo": 0.20}
     else:
-        w_dc, w_elo = 2 / 3, 1 / 3
-        ens_a = w_dc * dc_p["dc_win_a"] + w_elo * elo_p["elo_win_a"]
-        ens_d = w_dc * dc_p["dc_draw"]  + w_elo * elo_p["elo_draw"]
-        ens_b = w_dc * dc_p["dc_win_b"] + w_elo * elo_p["elo_win_b"]
+        return {"dc": 0.667, "elo": 0.333}
 
-    total = ens_a + ens_d + ens_b
+
+def _ensemble(dc_p: dict, elo_p: dict, xgb_p: dict | None, lgbm_p: dict | None,
+              weights: dict) -> dict:
+    """Weighted ensemble using provided weights."""
+    ens_a = ens_d = ens_b = 0.0
+    total_w = 0.0
+
+    ens_a += weights["dc"] * dc_p["dc_win_a"]
+    ens_d += weights["dc"] * dc_p["dc_draw"]
+    ens_b += weights["dc"] * dc_p["dc_win_b"]
+    total_w += weights["dc"]
+
+    ens_a += weights["elo"] * elo_p["elo_win_a"]
+    ens_d += weights["elo"] * elo_p["elo_draw"]
+    ens_b += weights["elo"] * elo_p["elo_win_b"]
+    total_w += weights["elo"]
+
+    if xgb_p and weights.get("xgb", 0) > 0:
+        ens_a += weights["xgb"] * xgb_p["xgb_win_a"]
+        ens_d += weights["xgb"] * xgb_p["xgb_draw"]
+        ens_b += weights["xgb"] * xgb_p["xgb_win_b"]
+        total_w += weights["xgb"]
+
+    if lgbm_p and weights.get("lgbm", 0) > 0:
+        ens_a += weights["lgbm"] * lgbm_p["lgbm_win_a"]
+        ens_d += weights["lgbm"] * lgbm_p["lgbm_draw"]
+        ens_b += weights["lgbm"] * lgbm_p["lgbm_win_b"]
+        total_w += weights["lgbm"]
+
+    if total_w < 1e-9:
+        return {"ens_win_a": 1/3, "ens_draw": 1/3, "ens_win_b": 1/3}
+    total_p = ens_a + ens_d + ens_b
+    if total_p < 1e-9:
+        total_p = 1.0
     return {
-        "ens_win_a": ens_a / total,
-        "ens_draw":  ens_d / total,
-        "ens_win_b": ens_b / total,
+        "ens_win_a": ens_a / total_p,
+        "ens_draw":  ens_d / total_p,
+        "ens_win_b": ens_b / total_p,
     }
 
 
 # ─── XGBoost (optional) ───────────────────────────────────────────────────────
 
 def _load_xgb():
+    # Prefer calibrated model if available
+    cal_path = MODELS_DIR / "xgb_calibrated.pkl"
+    if cal_path.exists():
+        try:
+            with open(cal_path, "rb") as f:
+                d = pickle.load(f)
+            print("  XGBoost: loaded calibrated model")
+            return d["model"], d["feature_cols"]
+        except Exception as e:
+            print(f"  XGBoost calibrated load failed: {e}, trying uncalibrated ...")
+
     xgb_path = MODELS_DIR / "xgb_wc2026.json"
     feat_path = MODELS_DIR / "xgb_feature_cols.json"
     if not xgb_path.exists() or not feat_path.exists():
@@ -234,51 +282,80 @@ def _load_xgb():
         return None, None
 
 
-def _xgb_probs(
-    model,
-    feat_cols: list,
-    elo: dict,
-    team_features: dict,
-    team_a: str,
-    team_b: str,
-) -> dict | None:
-    """XGBoost prediction using real per-team form features."""
-    if model is None:
-        return None
+def _load_lgbm():
+    for path in [MODELS_DIR / "lgbm_calibrated.pkl", MODELS_DIR / "lgbm_wc2026.pkl"]:
+        if path.exists():
+            try:
+                with open(path, "rb") as f:
+                    d = pickle.load(f)
+                print(f"  LightGBM: loaded {path.name}")
+                return d["model"], d["feature_cols"]
+            except Exception as e:
+                print(f"  LightGBM load failed from {path.name}: {e}")
+    return None, None
+
+
+def _build_feature_row(elo: dict, team_features: dict, team_a: str, team_b: str,
+                        feat_cols: list) -> np.ndarray:
+    """Build a model input row from team names, Elo, and precomputed form features."""
     ta, tb = to_training_name(team_a), to_training_name(team_b)
-    r_a = elo.get(ta, 1500.0)
-    r_b = elo.get(tb, 1500.0)
+    r_a = elo.get(ta, elo.get(team_a, 1500.0))
+    r_b = elo.get(tb, elo.get(team_b, 1500.0))
 
     fa = team_features.get(team_a, team_features.get(ta, {}))
     fb = team_features.get(team_b, team_features.get(tb, {}))
     same_conf = int(fa.get("confederation", "A") == fb.get("confederation", "B"))
 
     row = {
-        "elo_home": r_a, "elo_away": r_b, "elo_diff": r_a - r_b,
-        "fifa_pts_home": 1000.0, "fifa_pts_away": 1000.0, "fifa_pts_diff": 0.0,
-        "form_win_home":    fa.get("win_rate",      0.5),
-        "form_draw_home":   fa.get("draw_rate",     0.2),
-        "form_loss_home":   fa.get("loss_rate",     0.3),
-        "form_avg_gf_home": fa.get("avg_gf",        1.5),
-        "form_avg_ga_home": fa.get("avg_ga",        1.2),
-        "form_pts_home":    fa.get("pts_per_game",  1.7),
-        "form_win_away":    fb.get("win_rate",      0.5),
-        "form_draw_away":   fb.get("draw_rate",     0.2),
-        "form_loss_away":   fb.get("loss_rate",     0.3),
-        "form_avg_gf_away": fb.get("avg_gf",        1.5),
-        "form_avg_ga_away": fb.get("avg_ga",        1.2),
-        "form_pts_away":    fb.get("pts_per_game",  1.7),
+        # Elo (new names)
+        "elo_diff": r_a - r_b, "elo_h": r_a, "elo_a": r_b,
+        # Home rolling form (new names)
+        "h_r10_win":   fa.get("win_rate",     0.4),
+        "h_r10_draw":  fa.get("draw_rate",    0.25),
+        "h_r10_loss":  fa.get("loss_rate",    0.35),
+        "h_r10_gf":    fa.get("avg_gf",       1.3),
+        "h_r10_ga":    fa.get("avg_ga",       1.3),
+        "h_r10_gd":    fa.get("avg_gf", 1.3) - fa.get("avg_ga", 1.3),
+        "h_r10_pts":   fa.get("pts_per_game", 1.45),
+        "h_days_rest": fa.get("days_since_last", 14),
+        # Away rolling form (new names)
+        "a_r10_win":   fb.get("win_rate",     0.4),
+        "a_r10_draw":  fb.get("draw_rate",    0.25),
+        "a_r10_loss":  fb.get("loss_rate",    0.35),
+        "a_r10_gf":    fb.get("avg_gf",       1.3),
+        "a_r10_ga":    fb.get("avg_ga",       1.3),
+        "a_r10_gd":    fb.get("avg_gf", 1.3) - fb.get("avg_ga", 1.3),
+        "a_r10_pts":   fb.get("pts_per_game", 1.45),
+        "a_days_rest": fb.get("days_since_last", 14),
+        # H2H / WC history
+        "h2h_home_wins": 0, "h2h_draws": 0, "h2h_away_wins": 0,
+        "wc_apps_home": fa.get("wc_apps", 5), "wc_wins_home": fa.get("wc_wins", 3),
+        "wc_apps_away": fb.get("wc_apps", 5), "wc_wins_away": fb.get("wc_wins", 3),
+        # Confederation
+        "conf_home_enc": fa.get("conf_enc", 6), "conf_away_enc": fb.get("conf_enc", 6),
         "same_confederation": same_conf,
         "is_neutral": 1, "importance": 4.0,
-        "days_since_last_home": fa.get("days_since_last", 7),
-        "days_since_last_away": fb.get("days_since_last", 7),
-        "h2h_home_wins": 0, "h2h_draws": 0, "h2h_away_wins": 0,
-        "conf_home_enc": fa.get("conf_enc", 6),
-        "conf_away_enc": fb.get("conf_enc", 6),
     }
-    x = np.array([row.get(c, 0.0) for c in feat_cols], dtype=float).reshape(1, -1)
+    arr = np.array([row.get(c, 0.0) for c in feat_cols], dtype=float).reshape(1, -1)
+    return pd.DataFrame(arr, columns=feat_cols)
+
+
+def _xgb_probs(model, feat_cols: list, elo: dict, team_features: dict,
+               team_a: str, team_b: str) -> dict | None:
+    if model is None:
+        return None
+    x = _build_feature_row(elo, team_features, team_a, team_b, feat_cols)
     p = model.predict_proba(x)[0]
     return {"xgb_win_a": float(p[2]), "xgb_draw": float(p[1]), "xgb_win_b": float(p[0])}
+
+
+def _lgbm_probs(model, feat_cols: list, elo: dict, team_features: dict,
+                team_a: str, team_b: str) -> dict | None:
+    if model is None:
+        return None
+    x = _build_feature_row(elo, team_features, team_a, team_b, feat_cols)
+    p = model.predict_proba(x)[0]
+    return {"lgbm_win_a": float(p[2]), "lgbm_draw": float(p[1]), "lgbm_win_b": float(p[0])}
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -315,16 +392,16 @@ def generate_pretournament_predictions(force: bool = False) -> pd.DataFrame:
     with open(elo_path) as f:
         elo = json.load(f)
 
-    xgb_model, feat_cols = _load_xgb()
+    xgb_model, xgb_feat_cols = _load_xgb()
+    lgbm_model, lgbm_feat_cols = _load_lgbm()
     xgb_available = xgb_model is not None
-    print(f"Models loaded: DC + Elo" + (" + XGBoost" if xgb_available else " (XGBoost not found)"))
+    lgbm_available = lgbm_model is not None
+    print(f"Models loaded: DC + Elo"
+          + (" + XGBoost" if xgb_available else "")
+          + (" + LightGBM" if lgbm_available else ""))
 
-    # Precompute real form features for all WC 2026 teams
     team_features = _precompute_team_features(_TOURNAMENT_CUTOFF)
-
-    print(f"Ensemble weights: DC={'40%' if xgb_available else '66.7%'}  "
-          f"XGB={'40%' if xgb_available else 'N/A'}  "
-          f"Elo={'20%' if xgb_available else '33.3%'}")
+    ew = _load_ensemble_weights(xgb_available, lgbm_available)
 
     fixtures = get_all_group_fixtures()
     print(f"Generating predictions for {len(fixtures)} fixtures ...")
@@ -335,10 +412,11 @@ def generate_pretournament_predictions(force: bool = False) -> pd.DataFrame:
         ta = fix["team_a"]
         tb = fix["team_b"]
 
-        dc_p = _dc_probs_and_xg(dc, ta, tb)
-        elo_p = _elo_probs(elo, ta, tb)
-        xgb_p = _xgb_probs(xgb_model, feat_cols, elo, team_features, ta, tb) if xgb_available else None
-        ens_p = _ensemble(dc_p, elo_p, xgb_p)
+        dc_p   = _dc_probs_and_xg(dc, ta, tb)
+        elo_p  = _elo_probs(elo, ta, tb)
+        xgb_p  = _xgb_probs(xgb_model, xgb_feat_cols, elo, team_features, ta, tb) if xgb_available else None
+        lgbm_p = _lgbm_probs(lgbm_model, lgbm_feat_cols, elo, team_features, ta, tb) if lgbm_available else None
+        ens_p  = _ensemble(dc_p, elo_p, xgb_p, lgbm_p, ew)
 
         row: dict = {
             "match_id": fix["match_id"],
@@ -348,6 +426,7 @@ def generate_pretournament_predictions(force: bool = False) -> pd.DataFrame:
             "team_b": tb,
             **dc_p,
             **(xgb_p if xgb_p else {"xgb_win_a": None, "xgb_draw": None, "xgb_win_b": None}),
+            **(lgbm_p if lgbm_p else {"lgbm_win_a": None, "lgbm_draw": None, "lgbm_win_b": None}),
             **elo_p,
             **ens_p,
         }
@@ -356,24 +435,23 @@ def generate_pretournament_predictions(force: bool = False) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     col_order = [
         "match_id", "date", "group", "team_a", "team_b",
-        # DC 1X2 + xG
         "dc_win_a", "dc_draw", "dc_win_b", "dc_xg_a", "dc_xg_b",
         "dc_pred_score_a", "dc_pred_score_b", "dc_scoreline_probs",
-        # DC binary markets
         *_MKT_COLS,
-        # XGBoost
         "xgb_win_a", "xgb_draw", "xgb_win_b",
-        # Elo
+        "lgbm_win_a", "lgbm_draw", "lgbm_win_b",
         "elo_win_a", "elo_draw", "elo_win_b",
-        # Ensemble
         "ens_win_a", "ens_draw", "ens_win_b",
     ]
+    # Only keep columns that actually exist
+    col_order = [c for c in col_order if c in df.columns]
     df = df[col_order]
     df.to_csv(OUT_FILE, index=False)
 
     FREEZE_MARKER.write_text(
         f"Frozen predictions generated. {len(df)} fixtures. "
         f"XGBoost={'included' if xgb_available else 'omitted'}. "
+        f"LightGBM={'included' if lgbm_available else 'omitted'}. "
         f"Markets={len(_MKT_COLS)} binary columns."
     )
 

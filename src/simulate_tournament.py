@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import pickle
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -135,14 +136,55 @@ def compute_standings_from_results(group_teams: list[str], matches: pd.DataFrame
     return standings
 
 
-def sort_standings(standings: dict[str, Standing], rng: Optional[np.random.Generator] = None) -> list[Standing]:
+def _h2h_record(team_a: str, team_b: str, match_results: list[tuple]) -> tuple[int, int, int]:
+    """Return (pts_a, gd_a, gf_a) in H2H matches between team_a and team_b."""
+    pts = gd = gf = 0
+    for ht, at, hs, as_ in match_results:
+        if ht == team_a and at == team_b:
+            gf += hs; gd += hs - as_
+            pts += 3 if hs > as_ else (1 if hs == as_ else 0)
+        elif ht == team_b and at == team_a:
+            gf += as_; gd += as_ - hs
+            pts += 3 if as_ > hs else (1 if hs == as_ else 0)
+    return pts, gd, gf
+
+
+def sort_standings(standings: dict[str, Standing], rng: Optional[np.random.Generator] = None,
+                   match_results: Optional[list] = None) -> list[Standing]:
+    """Sort by pts, gd, gf; H2H tiebreaker for equal-pts pairs; then random."""
     lst = list(standings.values())
-    # Primary: pts, gd, gf — ties broken randomly
-    if rng is not None:
-        noise = rng.random(len(lst)) * 0.001
-        return sorted(lst, key=lambda s: s.sort_key()[0] * 1000 + s.sort_key()[1] * 10 + s.sort_key()[2],
-                       reverse=True)
-    return sorted(lst, key=lambda s: s.sort_key(), reverse=True)
+    mr = match_results or []
+
+    def sort_key(s: Standing) -> tuple:
+        return (s.points, s.gd, s.gf)
+
+    def tiebreak_key(s: Standing, rivals: list["Standing"]) -> tuple:
+        # Among rivals, compute H2H pts/gd/gf
+        h2h_pts = h2h_gd = h2h_gf = 0
+        for r in rivals:
+            if r.team == s.team:
+                continue
+            pts, gd, gf = _h2h_record(s.team, r.team, mr)
+            h2h_pts += pts; h2h_gd += gd; h2h_gf += gf
+        return (sort_key(s), h2h_pts, h2h_gd, h2h_gf)
+
+    # Group teams by (pts, gd, gf) to apply H2H only within tied groups
+    from itertools import groupby as _groupby
+    lst.sort(key=sort_key, reverse=True)
+    final: list[Standing] = []
+    i = 0
+    while i < len(lst):
+        j = i + 1
+        while j < len(lst) and sort_key(lst[j]) == sort_key(lst[i]):
+            j += 1
+        tied = lst[i:j]
+        if len(tied) > 1 and mr:
+            tied.sort(key=lambda s: tiebreak_key(s, tied), reverse=True)
+        elif len(tied) > 1 and rng is not None:
+            rng.shuffle(tied)
+        final.extend(tied)
+        i = j
+    return final
 
 
 # ─────────────────────────────────────────────────────────────
@@ -177,14 +219,41 @@ def load_models() -> dict:
             m.load_model(str(xgb_path))
             with open(feat_path) as f:
                 feat_cols = json.load(f)["feature_cols"]
-            models["xgb"] = (m, feat_cols)
-            log.info("Loaded XGBoost model")
-            # Precompute real form features — fixes the hardcoded-constants bug
+            # Prefer calibrated model if available
+            cal_path = MODELS_DIR / "xgb_calibrated.pkl"
+            if cal_path.exists():
+                with open(cal_path, "rb") as f:
+                    cal_data = pickle.load(f)
+                models["xgb"] = (cal_data["model"], cal_data["feature_cols"])
+                log.info("Loaded XGBoost (calibrated)")
+            else:
+                models["xgb"] = (m, feat_cols)
+                log.info("Loaded XGBoost model")
             xgb_feats = _precompute_xgb_team_features(_TOURNAMENT_CUTOFF)
             if xgb_feats:
                 models["xgb_features"] = xgb_feats
         except Exception as e:
             log.warning("Could not load XGBoost: %s", e)
+
+    lgbm_path = MODELS_DIR / "lgbm_calibrated.pkl"
+    if not lgbm_path.exists():
+        lgbm_path = MODELS_DIR / "lgbm_wc2026.pkl"
+    if lgbm_path.exists():
+        try:
+            with open(lgbm_path, "rb") as f:
+                lgbm_data = pickle.load(f)
+            models["lgbm"] = (lgbm_data["model"], lgbm_data["feature_cols"])
+            log.info("Loaded LightGBM model")
+        except Exception as e:
+            log.warning("Could not load LightGBM: %s", e)
+
+    ew_path = MODELS_DIR / "ensemble_weights.json"
+    if ew_path.exists():
+        with open(ew_path) as f:
+            ew = json.load(f)
+        models["ensemble_weights"] = ew
+        log.info("Loaded ensemble weights: dc=%.2f xgb=%.2f lgbm=%.2f elo=%.2f",
+                 ew.get("dc",0), ew.get("xgb",0), ew.get("lgbm",0), ew.get("elo",0))
 
     return models
 
@@ -383,70 +452,100 @@ def get_match_probs(
     if cache_key in _ENSEMBLE_CACHE:
         return _ENSEMBLE_CACHE[cache_key]
 
-    weights = {"dc": 0.40, "xgb": 0.40, "elo": 0.20}
-    available = {k: v for k, v in weights.items() if k in models}
+    # Use optimized weights from file; fall back to sensible defaults
+    ew = models.get("ensemble_weights", {})
+    has_lgbm = "lgbm" in models
+    if ew:
+        weights = {
+            "dc":  ew.get("dc",  0.40),
+            "xgb": ew.get("xgb", 0.35),
+            "lgbm": ew.get("lgbm", 0.0) if has_lgbm else 0.0,
+            "elo": ew.get("elo", 0.20),
+        }
+    else:
+        weights = {"dc": 0.40, "xgb": 0.35, "lgbm": 0.05 if has_lgbm else 0.0, "elo": 0.20}
+
+    available = {k: v for k, v in weights.items() if k in models and v > 0}
     if not available:
         return {"home_win": 1 / 3, "draw": 1 / 3, "away_win": 1 / 3}
 
     total_w = sum(available.values())
     p_hw = p_d = p_aw = 0.0
 
+    elo_ratings = models.get("elo", {})
+    ca, cb = _canonical(team_a), _canonical(team_b)
+    r_a = elo_ratings.get(ca, elo_ratings.get(team_a, 1500.0))
+    r_b = elo_ratings.get(cb, elo_ratings.get(team_b, 1500.0))
+    xgb_feats = models.get("xgb_features", {})
+    fa = xgb_feats.get(team_a, xgb_feats.get(ca, {}))
+    fb = xgb_feats.get(team_b, xgb_feats.get(cb, {}))
+
+    def _feature_row(feat_cols):
+        same_conf = int(fa.get("confederation", "A") == fb.get("confederation", "B"))
+        frow = {
+            "elo_h": r_a, "elo_a": r_b, "elo_diff": r_a - r_b,
+            "elo_home": r_a, "elo_away": r_b,
+            "h_r10_win":  fa.get("win_rate", 0.4),
+            "h_r10_draw": fa.get("draw_rate", 0.25),
+            "h_r10_loss": fa.get("loss_rate", 0.35),
+            "h_r10_gf":   fa.get("avg_gf", 1.3),
+            "h_r10_ga":   fa.get("avg_ga", 1.3),
+            "h_r10_gd":   fa.get("avg_gf", 1.3) - fa.get("avg_ga", 1.3),
+            "h_r10_pts":  fa.get("pts_per_game", 1.45),
+            "h_days_rest": fa.get("days_since_last", 14),
+            "a_r10_win":  fb.get("win_rate", 0.4),
+            "a_r10_draw": fb.get("draw_rate", 0.25),
+            "a_r10_loss": fb.get("loss_rate", 0.35),
+            "a_r10_gf":   fb.get("avg_gf", 1.3),
+            "a_r10_ga":   fb.get("avg_ga", 1.3),
+            "a_r10_gd":   fb.get("avg_gf", 1.3) - fb.get("avg_ga", 1.3),
+            "a_r10_pts":  fb.get("pts_per_game", 1.45),
+            "a_days_rest": fb.get("days_since_last", 14),
+            "h2h_home_wins": 0, "h2h_draws": 0, "h2h_away_wins": 0,
+            "wc_apps_home": fa.get("wc_apps", 5), "wc_wins_home": fa.get("wc_wins", 3),
+            "wc_apps_away": fb.get("wc_apps", 5), "wc_wins_away": fb.get("wc_wins", 3),
+            "conf_home_enc": fa.get("conf_enc", 6), "conf_away_enc": fb.get("conf_enc", 6),
+            "same_confederation": same_conf, "is_neutral": int(is_neutral), "importance": 4.0,
+            # Legacy column names (older models)
+            "form_win_home":    fa.get("win_rate", 0.4),
+            "form_draw_home":   fa.get("draw_rate", 0.25),
+            "form_loss_home":   fa.get("loss_rate", 0.35),
+            "form_avg_gf_home": fa.get("avg_gf", 1.3),
+            "form_avg_ga_home": fa.get("avg_ga", 1.3),
+            "form_pts_home":    fa.get("pts_per_game", 1.45),
+            "form_win_away":    fb.get("win_rate", 0.4),
+            "form_draw_away":   fb.get("draw_rate", 0.25),
+            "form_loss_away":   fb.get("loss_rate", 0.35),
+            "form_avg_gf_away": fb.get("avg_gf", 1.3),
+            "form_avg_ga_away": fb.get("avg_ga", 1.3),
+            "form_pts_away":    fb.get("pts_per_game", 1.45),
+        }
+        arr = np.array([frow.get(c, 0.0) for c in feat_cols], dtype=float).reshape(1, -1)
+        return pd.DataFrame(arr, columns=feat_cols)
+
     if "dc" in available:
         dc = _dc_probs(models["dc"], team_a, team_b, is_neutral)
         w = weights["dc"] / total_w
-        p_hw += w * dc["home_win"]
-        p_d += w * dc["draw"]
-        p_aw += w * dc["away_win"]
+        p_hw += w * dc["home_win"]; p_d += w * dc["draw"]; p_aw += w * dc["away_win"]
 
     if "elo" in available:
         elo = _elo_probs(models["elo"], team_a, team_b)
         w = weights["elo"] / total_w
-        p_hw += w * elo["home_win"]
-        p_d += w * elo["draw"]
-        p_aw += w * elo["away_win"]
+        p_hw += w * elo["home_win"]; p_d += w * elo["draw"]; p_aw += w * elo["away_win"]
 
     if "xgb" in available:
         xgb_model, feat_cols = models["xgb"]
-        elo_ratings = models.get("elo", {})
-        ca, cb = _canonical(team_a), _canonical(team_b)
-        r_a = elo_ratings.get(ca, elo_ratings.get(team_a, 1500.0))
-        r_b = elo_ratings.get(cb, elo_ratings.get(team_b, 1500.0))
-
-        # Use precomputed per-team form features (fixed: no longer hardcoded constants)
-        xgb_feats = models.get("xgb_features", {})
-        fa = xgb_feats.get(team_a, xgb_feats.get(ca, {}))
-        fb = xgb_feats.get(team_b, xgb_feats.get(cb, {}))
-        same_conf = int(fa.get("confederation", "A") == fb.get("confederation", "B"))
-
-        feature_row = {
-            "elo_home": r_a, "elo_away": r_b, "elo_diff": r_a - r_b,
-            "fifa_pts_home": 1000.0, "fifa_pts_away": 1000.0, "fifa_pts_diff": 0.0,
-            "form_win_home":    fa.get("win_rate", 0.5),
-            "form_draw_home":   fa.get("draw_rate", 0.2),
-            "form_loss_home":   fa.get("loss_rate", 0.3),
-            "form_avg_gf_home": fa.get("avg_gf", 1.5),
-            "form_avg_ga_home": fa.get("avg_ga", 1.2),
-            "form_pts_home":    fa.get("pts_per_game", 1.7),
-            "form_win_away":    fb.get("win_rate", 0.5),
-            "form_draw_away":   fb.get("draw_rate", 0.2),
-            "form_loss_away":   fb.get("loss_rate", 0.3),
-            "form_avg_gf_away": fb.get("avg_gf", 1.5),
-            "form_avg_ga_away": fb.get("avg_ga", 1.2),
-            "form_pts_away":    fb.get("pts_per_game", 1.7),
-            "same_confederation": same_conf,
-            "is_neutral": int(is_neutral), "importance": 4.0,
-            "days_since_last_home": fa.get("days_since_last", 7),
-            "days_since_last_away": fb.get("days_since_last", 7),
-            "h2h_home_wins": 0, "h2h_draws": 0, "h2h_away_wins": 0,
-            "conf_home_enc": fa.get("conf_enc", 6),
-            "conf_away_enc": fb.get("conf_enc", 6),
-        }
-        row = np.array([feature_row.get(c, 0.0) for c in feat_cols], dtype=float).reshape(1, -1)
+        row = _feature_row(feat_cols)
         probs = xgb_model.predict_proba(row)[0]
         w = weights["xgb"] / total_w
-        p_hw += w * float(probs[2])
-        p_d += w * float(probs[1])
-        p_aw += w * float(probs[0])
+        p_hw += w * float(probs[2]); p_d += w * float(probs[1]); p_aw += w * float(probs[0])
+
+    if "lgbm" in available:
+        lgbm_model, lgbm_feat_cols = models["lgbm"]
+        row = _feature_row(lgbm_feat_cols)
+        probs = lgbm_model.predict_proba(row)[0]
+        w = weights["lgbm"] / total_w
+        p_hw += w * float(probs[2]); p_d += w * float(probs[1]); p_aw += w * float(probs[0])
 
     result = {"home_win": p_hw, "draw": p_d, "away_win": p_aw}
     _ENSEMBLE_CACHE[cache_key] = result
@@ -515,19 +614,26 @@ def simulate_group_stage(
         for _, row in completed_grp.iterrows():
             completed_pairs.add(frozenset([str(row["home_team"]), str(row["away_team"])]))
 
+        # Track all match results for H2H tiebreaking
+        all_match_results: list[tuple] = []
+        for _, row in completed_grp.iterrows():
+            ht, at = str(row["home_team"]), str(row["away_team"])
+            if ht in standings and at in standings:
+                all_match_results.append((ht, at, int(row["home_score"]), int(row["away_score"])))
+
         for team_a, team_b in combinations(teams, 2):
             if frozenset([team_a, team_b]) in completed_pairs:
                 continue  # already played
             if "dc" in models:
-                # Sample from DC joint distribution — scores are consistent with win probs
                 hg, ag = _sample_score_from_dc(models["dc"], team_a, team_b, rng, allow_draw=True)
             else:
                 probs = get_match_probs(models, team_a, team_b, is_neutral=True)
                 hg, ag = _sample_score(probs, rng, allow_draw=True)
             _update_standing(standings[team_a], hg, ag)
             _update_standing(standings[team_b], ag, hg)
+            all_match_results.append((team_a, team_b, hg, ag))
 
-        sorted_standings = sort_standings(standings, rng)
+        sorted_standings = sort_standings(standings, rng, match_results=all_match_results)
         group_standings[group_name] = sorted_standings
 
         if len(sorted_standings) > 2:
